@@ -131,7 +131,7 @@ def soundscape(signal_strength, signal_shape_ratio):
     global current_frequency, current_volume
     
     # Map signal strength to volume (0.05 to 0.7 for better sensitivity)
-    max_expected_strength = 10000  # Lowered for more sensitivity
+    max_expected_strength = 100  # Lowered for more sensitivity
     min_volume = 0.05   # Minimum volume instead of 0
     max_volume = 0.7    # Maximum volume instead of 0.5
 

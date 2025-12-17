@@ -160,33 +160,46 @@ def normalize_samples(samples, first=0, last=None):
     return normalized
     
     
+    
+# Global features dict accessible to all modules
+current_features = {
+    'total_sum': 0,
+    'first_half_sum': 0,
+    'second_half_sum': 0,
+    'diff': 0,
+    'cumulative_total': 0,
+    'peak': 0,
+    'timestamp': 0,
+    'ratio': 0
+}
+    
 def extract_signal_features(samples, start_index=6, end_trim=1):
     """
-    Extract shape and strength features from a sample set
+    Extract shape and strength features from a sample set.
+    Updates the global current_features dict directly.
     
     Args:
         samples: list of sample values (typically 25 samples)
         start_index: first index to include (default 6 = skip first 6)
         end_trim: number of samples to trim from end (default 1)
         
-    Returns:
-        dict with:
-            - total_sum: sum of all samples in subset
-            - first_half_sum: sum of first half of subset
-            - second_half_sum: sum of second half of subset
-            
+    Updates global current_features with:
+        - total_sum: sum of all samples in subset
+        - first_half_sum: sum of first half of subset
+        - second_half_sum: sum of second half of subset
+        - diff: first_half_sum - second_half_sum
+        
     Example:
         samples = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
         extract_signal_features(samples, start_index=2, end_trim=1)
-        # Subset = [30, 40, 50, 60, 70, 80, 90] (7 samples)
-        # First half = [30, 40, 50] (3 samples)
-        # Second half = [60, 70, 80, 90] (4 samples)
-        # Returns: {
+        # Updates current_features with:
         #   'total_sum': 420,
         #   'first_half_sum': 120,
-        #   'second_half_sum': 300
-        # }
+        #   'second_half_sum': 300,
+        #   'diff': -180
     """
+    global current_features
+    
     # Extract subset
     if end_trim > 0:
         subset = samples[start_index:-end_trim]
@@ -194,11 +207,13 @@ def extract_signal_features(samples, start_index=6, end_trim=1):
         subset = samples[start_index:]
     
     if len(subset) == 0:
-        return {
+        current_features.update({
             'total_sum': 0,
             'first_half_sum': 0,
-            'second_half_sum': 0
-        }
+            'second_half_sum': 0,
+            'diff': 0
+        })
+        return
     
     # Calculate total sum
     total_sum = sum(subset)
@@ -211,9 +226,37 @@ def extract_signal_features(samples, start_index=6, end_trim=1):
     # Calculate half sums
     first_half_sum = sum(first_half) / 12
     second_half_sum = sum(second_half) / 3
+    diff1 = first_half_sum - second_half_sum
     
-    return {
+    # Update global features dict directly
+    current_features.update({
         'total_sum': total_sum,
         'first_half_sum': first_half_sum,
-        'second_half_sum': second_half_sum
-    }
+        'second_half_sum': second_half_sum,
+        'diff': diff1
+    })
+    
+    
+    
+def update_peak_tracker(key='diff'):
+    """Updates cumulative_total and peak directly in current_features."""
+    global current_features
+    current = current_features[key]
+    
+    # Reset condition: diff fell below zero
+    if current < 0:
+        current_features['cumulative_total'] = 0
+        current_features['peak'] = max(current, 0)  # or just 0
+        return True  # Trigger event if needed
+    
+    # Positive diff - accumulate
+    current_features['cumulative_total'] += current
+    
+    # Update peak if we have a new maximum
+    if current > current_features['peak']:
+        current_features['peak'] = current
+        
+        # update the condutctivity ratio
+        current_features['ratio'] =  current_features['second_half_sum'] /  current_features['first_half_sum']
+    
+    return False  # No reset/trigger

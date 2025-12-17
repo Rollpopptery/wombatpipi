@@ -127,7 +127,7 @@ def _read_loop():
                         if len(values) == CURVE_SAMPLE_SIZE:
                             values_array = np.array(values)
                             
-                            # Apply tau compensation to flatten exponential decay
+                            # NOT USING
                             #   compensated = values_array * get_compensation_factors()
                             compensated = values_array
                             
@@ -144,16 +144,22 @@ def _read_loop():
                                     normalized = fast_signal - long_baseline
                                     
                                     # Extract signal features for sound
-                                    features = functions.extract_signal_features(normalized.tolist())
+                                    functions.extract_signal_features(normalized.tolist())
+                                    
+                                    # monitor signal peaks
+                                    #
+                                    functions.update_peak_tracker(key='diff')
+                                    functions.current_features['timestamp'] = time.time()
                                     
                                     # Calculate shape ratio
-                                    if features['second_half_sum'] > 0:
-                                        ratio = features['first_half_sum'] / features['second_half_sum']
+                                    if functions.current_features['second_half_sum'] > 0:
+                                        ratio = functions.current_features['first_half_sum'] / functions.current_features['second_half_sum']
                                     else:
                                         ratio = 1.0
+                                  
                                     
                                     # Update sound at real data rate (~20Hz)
-                                    sound.soundscape(features['first_half_sum'], ratio)
+                                    sound.soundscape(functions.current_features['diff'], ratio)
                                     
                                 except Exception as e:
                                     print(f"Sound update error: {e}")

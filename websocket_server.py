@@ -6,6 +6,7 @@ import serial_reader
 import settings
 import functions
 import sound
+import copy
 
 # Initialize
 sound.init()
@@ -34,13 +35,17 @@ async def stream_data(websocket):
                     normalized = np.array(avg['signal']) - np.array(avg['values'])
                     
                     # Extract signal features for soundscape
-                    features = functions.extract_signal_features(normalized.tolist())
+                    features = copy.copy(functions.current_features)  # Shallow copy
+                    
+                    
+                    
                     
                     # Calculate shape ratio
-                    if features['second_half_sum'] > 0:
-                        ratio = features['first_half_sum'] / features['second_half_sum']
-                    else:
-                        ratio = 1.0
+                    #if features['second_half_sum'] > 0:
+                        #ratio = features['first_half_sum'] / features['second_half_sum']
+                    #else:
+                        #ratio = 1.0
+                    ratio = features['ratio']
                     
                     # Update soundscape based on signal
                     #sound.soundscape(features['total_sum'], ratio)
@@ -54,6 +59,8 @@ async def stream_data(websocket):
                             'total_sum': features['total_sum'],
                             'first_half_sum': features['first_half_sum'],
                             'second_half_sum': features['second_half_sum'],
+                            'diff': features['diff'],
+                            'cumulative_total':features['cumulative_total'],
                             'ratio': ratio
                         }
                     }

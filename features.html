@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Metal Detector - Feature Plot</title>
+    <title>WOMBAT PiPi - Plot</title>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="static/css/uPlot.min.css">
     <style>
@@ -73,6 +73,8 @@
         let timeData = [];
         let firstHalfData = [];
         let secondHalfData = [];
+        let diffData = [];
+        let cumulativeTotalData = [];  // Buffer for cumulative total
         let sampleCount = 0;
 
         function initChart() {
@@ -83,6 +85,9 @@
                 scales: {
                     x: {
                         time: false
+                    },
+                    cumulative: {  // Separate scale for cumulative total
+                        range: [0, 100]  // Will auto-adjust
                     }
                 },
                 series: [
@@ -93,17 +98,26 @@
                         label: "First Half Sum",
                         stroke: "#1f77b4",
                         width: 2,
-                        points: {
-                            show: false
-                        }
+                        points: { show: false }
                     },
                     {
                         label: "Second Half Sum",
                         stroke: "#ff7f0e",
                         width: 2,
-                        points: {
-                            show: false
-                        }
+                        points: { show: false }
+                    },
+                    {
+                        label: "Diff", 
+                        stroke: "#2ca02c",
+                        width: 2,
+                        points: { show: false }
+                    },
+                    {
+                        label: "Cumulative Total",
+                        stroke: "#9467bd",  // Purple color
+                        width: 2,
+                        points: { show: false },
+                        scale: "cumulative"  // Use separate Y-axis scale
                     }
                 ],
                 axes: [
@@ -114,6 +128,12 @@
                     {
                         label: "Sum Value",
                         grid: { show: true }
+                    },
+                    {
+                        label: "Cumulative Total",
+                        side: 1,  // Right side Y-axis
+                        grid: { show: false },
+                        scale: "cumulative"
                     }
                 ],
                 legend: {
@@ -121,7 +141,7 @@
                 }
             };
             
-            chart = new uPlot(opts, [[], [], []], document.getElementById('chart'));
+            chart = new uPlot(opts, [[], [], [], [], []], document.getElementById('chart'));
         }
 
         // Connect to WebSocket
@@ -144,16 +164,20 @@
                         timeData.push(sampleCount++);
                         firstHalfData.push(packet.features.first_half_sum);
                         secondHalfData.push(packet.features.second_half_sum);
+                        diffData.push(packet.features.diff);
+                        cumulativeTotalData.push(packet.features.cumulative_total);
                         
                         // Keep only last BUFFER_SIZE points
                         if (timeData.length > BUFFER_SIZE) {
                             timeData.shift();
                             firstHalfData.shift();
                             secondHalfData.shift();
+                            diffData.shift();
+                            cumulativeTotalData.shift();
                         }
                         
                         // Update chart
-                        chart.setData([timeData, firstHalfData, secondHalfData]);
+                        chart.setData([timeData, firstHalfData, secondHalfData, diffData, cumulativeTotalData]);
                         
                         // Update statistics
                         updateCount++;
@@ -168,8 +192,10 @@
                             const stats = document.getElementById('stats');
                             const ratio = packet.features.ratio.toFixed(2);
                             const total = packet.features.total_sum.toFixed(0);
+                            const diff = packet.features.diff.toFixed(0);
+                            const cumulative = packet.features.cumulative_total.toFixed(0);
                             
-                            stats.textContent = `Update Rate: ${fps} Hz | Total Sum: ${total} | Ratio: ${ratio} | Buffer: ${timeData.length}/${BUFFER_SIZE}`;
+                            stats.textContent = `Update Rate: ${fps} Hz | Total Sum: ${total} | Ratio: ${ratio} | Diff: ${diff} | Cumulative: ${cumulative} | Buffer: ${timeData.length}/${BUFFER_SIZE}`;
                         }
                     }
                 } catch (e) {
