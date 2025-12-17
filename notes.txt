@@ -1,0 +1,15 @@
+Metal Detector Coil
+    ↓
+AC-coupled discharge curve (25 samples @ 3µs spacing) @ ~10Hz
+    ↓
+Serial Reader (230400 baud)
+    ↓
+Tau Compensation (flatten exponential decay)
+    ↓
+Adaptive EMA (asymmetric: slow rise, fast fall)
+    ↓
+Subtract Running Average (normalize to baseline)
+    ↓
+WebSocket Stream (10Hz fixed rate)
+    ↓
+Browser Display (line chart + waterfall heatmap)

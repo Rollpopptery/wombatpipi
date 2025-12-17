@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Metal Detector - Feature Plot</title>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="static/css/uPlot.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            margin: 0;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        #status {
+            text-align: center;
+            margin: 10px;
+            font-size: 16px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected {
+            color: #0a0;
+            background: #e0ffe0;
+        }
+        .disconnected {
+            color: #c00;
+            background: #ffe0e0;
+        }
+        #chart-container {
+            margin: 20px auto;
+            max-width: 1400px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #stats {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Metal Detector - Signal Features</h1>
+    <div id="status" class="disconnected">Connecting to WebSocket...</div>
+    
+    <div id="chart-container">
+        <div id="chart"></div>
+        <div id="stats">Waiting for data...</div>
+    </div>
+
+    <script src="static/js/uPlot.iife.min.js"></script>
+    <script>
+        // Configuration
+        const WS_URL = 'ws://localhost:8765';
+        const BUFFER_SIZE = 100;  // Keep last 100 points
+        
+        let ws;
+        let chart;
+        let updateCount = 0;
+        let lastUpdateTime = Date.now();
+        let fps = 0;
+        
+        // Data buffers
+        let timeData = [];
+        let firstHalfData = [];
+        let secondHalfData = [];
+        let sampleCount = 0;
+
+        function initChart() {
+            const opts = {
+                title: "Signal Features Over Time",
+                width: Math.min(1360, window.innerWidth - 80),
+                height: 500,
+                scales: {
+                    x: {
+                        time: false
+                    }
+                },
+                series: [
+                    {
+                        label: "Sample"
+                    },
+                    {
+                        label: "First Half Sum",
+                        stroke: "#1f77b4",
+                        width: 2,
+                        points: {
+                            show: false
+                        }
+                    },
+                    {
+                        label: "Second Half Sum",
+                        stroke: "#ff7f0e",
+                        width: 2,
+                        points: {
+                            show: false
+                        }
+                    }
+                ],
+                axes: [
+                    {
+                        label: "Sample Number",
+                        grid: { show: true }
+                    },
+                    {
+                        label: "Sum Value",
+                        grid: { show: true }
+                    }
+                ],
+                legend: {
+                    show: true
+                }
+            };
+            
+            chart = new uPlot(opts, [[], [], []], document.getElementById('chart'));
+        }
+
+        // Connect to WebSocket
+        function connect() {
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                const status = document.getElementById('status');
+                status.textContent = 'Connected - Streaming Features at 10Hz';
+                status.className = 'connected';
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const packet = JSON.parse(event.data);
+                    
+                    if (packet.type === 'data' && packet.features) {
+                        // Add new data point
+                        timeData.push(sampleCount++);
+                        firstHalfData.push(packet.features.first_half_sum);
+                        secondHalfData.push(packet.features.second_half_sum);
+                        
+                        // Keep only last BUFFER_SIZE points
+                        if (timeData.length > BUFFER_SIZE) {
+                            timeData.shift();
+                            firstHalfData.shift();
+                            secondHalfData.shift();
+                        }
+                        
+                        // Update chart
+                        chart.setData([timeData, firstHalfData, secondHalfData]);
+                        
+                        // Update statistics
+                        updateCount++;
+                        const now = Date.now();
+                        const elapsed = (now - lastUpdateTime) / 1000;
+                        
+                        if (elapsed >= 1.0) {
+                            fps = (updateCount / elapsed).toFixed(1);
+                            updateCount = 0;
+                            lastUpdateTime = now;
+                            
+                            const stats = document.getElementById('stats');
+                            const ratio = packet.features.ratio.toFixed(2);
+                            const total = packet.features.total_sum.toFixed(0);
+                            
+                            stats.textContent = `Update Rate: ${fps} Hz | Total Sum: ${total} | Ratio: ${ratio} | Buffer: ${timeData.length}/${BUFFER_SIZE}`;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing data:', e);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                const status = document.getElementById('status');
+                status.textContent = 'Error: Connection failed';
+                status.className = 'disconnected';
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                const status = document.getElementById('status');
+                status.textContent = 'Disconnected - Reconnecting...';
+                status.className = 'disconnected';
+                
+                // Attempt to reconnect after 2 seconds
+                setTimeout(connect, 2000);
+            };
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (chart) {
+                chart.setSize({
+                    width: Math.min(1360, window.innerWidth - 80),
+                    height: 500
+                });
+            }
+        });
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initChart();
+            connect();
+        });
+    </script>
+</body>
+</html>

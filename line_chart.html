@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Metal Detector - Live Line Chart</title>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="static/css/uPlot.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            margin: 0;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        #status {
+            text-align: center;
+            margin: 10px;
+            font-size: 16px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected {
+            color: #0a0;
+            background: #e0ffe0;
+        }
+        .disconnected {
+            color: #c00;
+            background: #ffe0e0;
+        }
+        #chart-container {
+            margin: 20px auto;
+            max-width: 1400px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #stats {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Metal Detector - Real-time Discharge Curve</h1>
+    <div id="status" class="disconnected">Connecting to WebSocket...</div>
+    
+    <div id="chart-container">
+        <div id="chart"></div>
+        <div id="stats">Waiting for data...</div>
+        <div style="text-align: center; margin: 20px;">
+            <label for="tau-slider">TAU (µs): </label>
+            <input type="range" id="tau-slider" min="10" max="100" value="30" step="1">
+            <span id="tau-value">30</span>
+        </div>
+    </div>
+
+    <script src="static/js/uPlot.iife.min.js"></script>
+    <script>
+        // Configuration
+        const WS_URL = 'ws://localhost:8765';
+        let ws;
+        let chart;
+        let updateCount = 0;
+        let lastUpdateTime = Date.now();
+        let fps = 0;
+        let currentTau = 30;
+
+        function initChart() {
+    const opts = {
+        title: "Normalized Discharge Curve (Sample - Running Average)",
+        width: Math.min(1360, window.innerWidth - 80),
+        height: 500,
+        scales: {
+            x: {
+                time: false  // Force numeric axis
+            },
+            y: {
+                range: [-500, 3000]
+            }
+        },
+        series: [
+            {
+                label: "Time (µs)"
+            },
+            {
+                label: "Deviation",
+                stroke: "#1f77b4",
+                width: 2,
+                scale: "y",
+                points: {
+                    show: true,
+                    size: 4,
+                    stroke: "#1f77b4",
+                    fill: "#fff"
+                }
+            }
+        ],
+        axes: [
+            {
+                label: "Time (µs)",
+                grid: { show: true }
+            },
+            {
+                scale: "y",
+                label: "Deviation from Average",
+                grid: { show: true }
+            }
+        ],
+        legend: {
+            show: true
+        }
+    };
+    chart = new uPlot(opts, [[], []], document.getElementById('chart'));
+}
+
+        // Connect to WebSocket
+        function connect() {
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                const status = document.getElementById('status');
+                status.textContent = 'Connected - Streaming at 10Hz';
+                status.className = 'connected';
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const packet = JSON.parse(event.data);
+                    
+                    if (packet.type === 'settings') {
+                        // Server sent tau value - update slider
+                        currentTau = packet.tau;
+                        document.getElementById('tau-slider').value = currentTau;
+                        document.getElementById('tau-value').textContent = currentTau;
+                        console.log('TAU updated from server:', currentTau);
+                        
+                    } else if (packet.type === 'data') {
+                        // Update chart with new data
+                        chart.setData([packet.times, packet.values]);
+                        
+                        // Update statistics
+                        updateCount++;
+                        const now = Date.now();
+                        const elapsed = (now - lastUpdateTime) / 1000;
+                        
+                        if (elapsed >= 1.0) {
+                            fps = (updateCount / elapsed).toFixed(1);
+                            updateCount = 0;
+                            lastUpdateTime = now;
+                            
+                            const stats = document.getElementById('stats');
+                            const maxVal = Math.max(...packet.values).toFixed(2);
+                            const minVal = Math.min(...packet.values).toFixed(2);
+                            stats.textContent = `Update Rate: ${fps} Hz | Range: ${minVal} to ${maxVal}`;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing data:', e);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                const status = document.getElementById('status');
+                status.textContent = 'Error: Connection failed';
+                status.className = 'disconnected';
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                const status = document.getElementById('status');
+                status.textContent = 'Disconnected - Reconnecting...';
+                status.className = 'disconnected';
+                
+                // Attempt to reconnect after 2 seconds
+                setTimeout(connect, 2000);
+            };
+        }
+
+        // Handle tau slider changes
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('tau-slider').addEventListener('input', (e) => {
+                currentTau = parseFloat(e.target.value);
+                document.getElementById('tau-value').textContent = currentTau;
+                
+                // Send to server
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'set_tau',
+                        tau: currentTau
+                    }));
+                }
+            });
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (chart) {
+                chart.setSize({
+                    width: Math.min(1360, window.innerWidth - 80),
+                    height: 500
+                });
+            }
+        });
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initChart();
+            connect();
+        });
+    </script>
+</body>
+</html>

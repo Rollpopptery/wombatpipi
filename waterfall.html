@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <h1>Metal Detector - Normalized Sample Waterfall</h1>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            margin: 0;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        #status {
+            text-align: center;
+            margin: 10px;
+            font-size: 16px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected {
+            color: #0a0;
+            background: #e0ffe0;
+        }
+        .disconnected {
+            color: #c00;
+            background: #ffe0e0;
+        }
+        #chart-container {
+            margin: 20px auto;
+            max-width: 1400px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #waterfall-canvas {
+            display: block;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            image-rendering: pixelated;
+        }
+        #stats {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        #color-scale {
+            text-align: center;
+            margin: 20px auto;
+            max-width: 600px;
+        }
+        #color-bar {
+            height: 30px;
+            background: linear-gradient(to right, blue, cyan, green, yellow, red);
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .scale-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Metal Detector - FFT Waterfall (Frequency Domain)</h1>
+    <div id="status" class="disconnected">Connecting to WebSocket...</div>
+    
+    <div id="chart-container">
+        <canvas id="waterfall-canvas" width="1000" height="600"></canvas>
+        <div id="stats">Waiting for data...</div>
+        
+        <div id="color-scale">
+            <div id="color-bar"></div>
+            <div class="scale-labels">
+                <span>Low (Blue)</span>
+                <span>Medium (Green)</span>
+                <span>High (Red)</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const WS_URL = 'ws://localhost:8765';
+        const CANVAS_WIDTH = 1000;
+        const CANVAS_HEIGHT = 600;
+        const ROW_THICKNESS = 10;
+        
+        let ws;
+        let canvas;
+        let ctx;
+        let updateCount = 0;
+        let lastUpdateTime = Date.now();
+        let fps = 0;
+        let numFreqBins = 0;
+        let colWidth = 0;
+
+        // Color mapping: magnitude -> RGB (spectral color map)
+        function magnitudeToColor(magnitude) {
+    // magnitude is already 0-1 normalized
+    const normalized = Math.max(0, Math.min(1, magnitude));
+    
+    let r, g, b;
+    
+    if (normalized < 0.25) {
+        // Blue to Cyan
+        const t = normalized / 0.25;
+        r = 0;
+        g = Math.floor(255 * t);
+        b = 255;
+    } else if (normalized < 0.5) {
+        // Cyan to Green
+        const t = (normalized - 0.25) / 0.25;
+        r = 0;
+        g = 255;
+        b = Math.floor(255 * (1 - t));
+    } else if (normalized < 0.75) {
+        // Green to Yellow
+        const t = (normalized - 0.5) / 0.25;
+        r = Math.floor(255 * t);
+        g = 255;
+        b = 0;
+    } else {
+        // Yellow to Red
+        const t = (normalized - 0.75) / 0.25;
+        r = 255;
+        g = Math.floor(255 * (1 - t));
+        b = 0;
+    }
+    
+    return `rgb(${r},${g},${b})`;
+}
+        // Initialize canvas
+        function initCanvas() {
+            canvas = document.getElementById('waterfall-canvas');
+            ctx = canvas.getContext('2d');
+            
+            // Fill with dark blue initially
+            ctx.fillStyle = 'rgb(0, 0, 50)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        }
+
+        // Add new FFT data row to waterfall
+        function addToWaterfall(magnitudes) {
+            // Update column width if number of frequency bins changed
+            if (magnitudes.length !== numFreqBins) {
+                numFreqBins = magnitudes.length;
+                colWidth = CANVAS_WIDTH / numFreqBins;
+            }
+            
+            // Shift canvas down by ROW_THICKNESS pixels
+            const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT - ROW_THICKNESS);
+            ctx.putImageData(imageData, 0, ROW_THICKNESS);
+            
+            // Draw new FFT data at top (Y=0)
+            for (let i = 0; i < numFreqBins; i++) {
+                const color = magnitudeToColor(magnitudes[i]);
+                ctx.fillStyle = color;
+                ctx.fillRect(i * colWidth, 0, colWidth, ROW_THICKNESS);
+            }
+        }
+
+        // Connect to WebSocket
+        function connect() {
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                const status = document.getElementById('status');
+                status.textContent = 'Connected - Streaming FFT Waterfall at 10Hz';
+                status.className = 'connected';
+            };
+
+            ws.onmessage = (event) => {
+    try {
+        const packet = JSON.parse(event.data);
+        
+        if (packet.type === 'data' && packet.fft && packet.fft.magnitudes) {
+            // Add normalized samples to waterfall
+            addToWaterfall(packet.fft.magnitudes);
+            
+            // Update statistics
+            updateCount++;
+            const now = Date.now();
+            const elapsed = (now - lastUpdateTime) / 1000;
+            
+            if (elapsed >= 1.0) {
+                fps = (updateCount / elapsed).toFixed(1);
+                updateCount = 0;
+                lastUpdateTime = now;
+                
+                const stats = document.getElementById('stats');
+                const maxMag = Math.max(...packet.fft.magnitudes).toFixed(3);
+                const minMag = Math.min(...packet.fft.magnitudes).toFixed(3);
+                const numSamples = packet.fft.magnitudes.length;
+                
+                stats.textContent = `Update Rate: ${fps} Hz | Samples: ${numSamples} | Range: ${minMag} - ${maxMag} (normalized 0-1) | Scrolling Down ↓`;
+            }
+        }
+    } catch (e) {
+        console.error('Error parsing data:', e);
+    }
+};
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                const status = document.getElementById('status');
+                status.textContent = 'Error: Connection failed';
+                status.className = 'disconnected';
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                const status = document.getElementById('status');
+                status.textContent = 'Disconnected - Reconnecting...';
+                status.className = 'disconnected';
+                
+                // Attempt to reconnect after 2 seconds
+                setTimeout(connect, 2000);
+            };
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initCanvas();
+            connect();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Metal Detector - FFT Spectrum</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            margin: 0;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        #status {
+            text-align: center;
+            margin: 10px;
+            font-size: 16px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected {
+            color: #0a0;
+            background: #e0ffe0;
+        }
+        .disconnected {
+            color: #c00;
+            background: #ffe0e0;
+        }
+        #chart-container {
+            margin: 20px auto;
+            max-width: 1400px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #fft-canvas {
+            display: block;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+        }
+        #stats {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Metal Detector - FFT Spectrum Analyzer</h1>
+    <div id="status" class="disconnected">Connecting to WebSocket...</div>
+    
+    <div id="chart-container">
+        <canvas id="fft-canvas" width="1200" height="600"></canvas>
+        <div id="stats">Waiting for data...</div>
+    </div>
+
+    <script>
+        // Configuration
+        const WS_URL = 'ws://localhost:8765';
+        const CANVAS_WIDTH = 1200;
+        const CANVAS_HEIGHT = 600;
+        const PADDING = 60;
+        const CHART_WIDTH = CANVAS_WIDTH - 2 * PADDING;
+        const CHART_HEIGHT = CANVAS_HEIGHT - 2 * PADDING;
+        
+        let ws;
+        let canvas;
+        let ctx;
+        let updateCount = 0;
+        let lastUpdateTime = Date.now();
+        let fps = 0;
+
+        // Initialize canvas
+        function initCanvas() {
+            canvas = document.getElementById('fft-canvas');
+            ctx = canvas.getContext('2d');
+        }
+
+        // Draw FFT bar chart
+        function drawFFT(frequencies, magnitudes) {
+            // Clear canvas
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            
+            // Find max magnitude for scaling
+            const maxMag = Math.max(...magnitudes);
+            
+            // Calculate bar width
+            const numBars = magnitudes.length;
+            const barWidth = CHART_WIDTH / numBars;
+            
+            // Draw bars
+            ctx.fillStyle = '#1f77b4';
+            for (let i = 0; i < numBars; i++) {
+                const barHeight = (magnitudes[i] / maxMag) * CHART_HEIGHT;
+                const x = PADDING + i * barWidth;
+                const y = PADDING + CHART_HEIGHT - barHeight;
+                
+                ctx.fillRect(x, y, barWidth - 1, barHeight);
+            }
+            
+            // Draw axes
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(PADDING, PADDING);
+            ctx.lineTo(PADDING, PADDING + CHART_HEIGHT);
+            ctx.lineTo(PADDING + CHART_WIDTH, PADDING + CHART_HEIGHT);
+            ctx.stroke();
+            
+            // Draw labels
+            ctx.fillStyle = '#000';
+            ctx.font = '14px Arial';
+            
+            // Y-axis label
+            ctx.save();
+            ctx.translate(20, CANVAS_HEIGHT / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.textAlign = 'center';
+            ctx.fillText('Sample Index', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 20);
+            ctx.restore();
+            
+            // X-axis label
+            ctx.textAlign = 'center';
+            ctx.fillText('Frequency (Hz)', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 20);
+            
+            // Draw frequency scale markers
+            ctx.font = '12px Arial';
+            const numMarkers = 5;
+            for (let i = 0; i <= numMarkers; i++) {
+                const freqIdx = Math.floor((i / numMarkers) * (frequencies.length - 1));
+                const freq = frequencies[freqIdx];
+                const x = PADDING + (i / numMarkers) * CHART_WIDTH;
+                
+                ctx.fillText(freq.toFixed(0), x, CANVAS_HEIGHT - 40);
+                
+                // Draw tick mark
+                ctx.beginPath();
+                ctx.moveTo(x, PADDING + CHART_HEIGHT);
+                ctx.lineTo(x, PADDING + CHART_HEIGHT + 5);
+                ctx.stroke();
+            }
+            
+            // Draw magnitude scale markers
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 5; i++) {
+                const mag = (maxMag / 5) * i;
+                const y = PADDING + CHART_HEIGHT - (i / 5) * CHART_HEIGHT;
+                
+                ctx.fillText(mag.toFixed(0), PADDING - 10, y + 5);
+                
+                // Draw tick mark
+                ctx.beginPath();
+                ctx.moveTo(PADDING - 5, y);
+                ctx.lineTo(PADDING, y);
+                ctx.stroke();
+            }
+            
+            // Draw title
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Normalized Sample Shape', CANVAS_WIDTH / 2, 30);
+        }
+
+        // Connect to WebSocket
+        function connect() {
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                const status = document.getElementById('status');
+                status.textContent = 'Connected - Streaming FFT at 10Hz';
+                status.className = 'connected';
+            };
+
+            ws.onmessage = (event) => {
+    try {
+        const packet = JSON.parse(event.data);
+        
+        if (packet.type === 'data' && packet.fft && packet.fft.magnitudes) {
+            // Create sample indices for x-axis (0, 1, 2, 3, ...)
+            const numSamples = packet.fft.magnitudes.length;
+            const sampleIndices = Array.from({length: numSamples}, (_, i) => i);
+            
+            // Draw bar chart with sample indices as x-axis
+            drawFFT(sampleIndices, packet.fft.magnitudes);
+            
+            // Update statistics
+            updateCount++;
+            const now = Date.now();
+            const elapsed = (now - lastUpdateTime) / 1000;
+            
+            if (elapsed >= 1.0) {
+                fps = (updateCount / elapsed).toFixed(1);
+                updateCount = 0;
+                lastUpdateTime = now;
+                
+                const stats = document.getElementById('stats');
+                const maxVal = Math.max(...packet.fft.magnitudes).toFixed(3);
+                const minVal = Math.min(...packet.fft.magnitudes).toFixed(3);
+                
+                stats.textContent = `Update Rate: ${fps} Hz | Samples: ${numSamples} | Range: ${minVal} - ${maxVal}`;
+            }
+        }
+    } catch (e) {
+        console.error('Error parsing data:', e);
+    }
+};
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                const status = document.getElementById('status');
+                status.textContent = 'Error: Connection failed';
+                status.className = 'disconnected';
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                const status = document.getElementById('status');
+                status.textContent = 'Disconnected - Reconnecting...';
+                status.className = 'disconnected';
+                
+                // Attempt to reconnect after 2 seconds
+                setTimeout(connect, 2000);
+            };
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initCanvas();
+            connect();
+        });
+    </script>
+</body>
+</html>
