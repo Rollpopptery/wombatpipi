@@ -158,7 +158,7 @@ def soundscape(signal_strength, signal_shape_ratio):
     strength_ratio = min(1.0, signal_strength / max_expected_strength)
     current_frequency = min_freq + (max_freq - min_freq) * strength_ratio
     
-    print(f"Strength: {signal_strength:.0f}, Freq: {current_frequency:.0f} Hz, Vol: {current_volume:.3f}")
+    #print(f"Strength: {signal_strength:.0f}, Freq: {current_frequency:.0f} Hz, Vol: {current_volume:.3f}")
     
     # Ensure tone is playing
     if not is_playing:
