@@ -236,18 +236,41 @@ def extract_signal_features(samples, start_index=6, end_trim=1):
         'diff': diff1
     })
     
-    
+
+def force_two_digit(value):
+    """Force any value to 2-digit string '00'-'99'."""
+    try:
+        # Convert to int, clamp to 0-99, pad with zero
+        num = int(float(value))
+        num = max(0, min(99, num))
+        return f"{num:02d}"  # Same as str(num).zfill(2)
+    except (ValueError, TypeError):
+        return "00"  # Default on error
+        
+        
     
 def update_peak_tracker(key='diff'):
     """Updates cumulative_total and peak directly in current_features."""
     global current_features
     current = current_features[key]
     
+    play_conductivity = False
+    getratio = 0;
+    
     # Reset condition: diff fell below zero
     if current < 0:
+        if(current_features['peak'] > 10):
+            play_conductivity = True
+            getratio = current_features['ratio'] 
+            getratio *= 100
+            
         current_features['cumulative_total'] = 0
         current_features['peak'] = max(current, 0)  # or just 0
-        return True  # Trigger event if needed
+        
+        if(play_conductivity):                    
+            num = force_two_digit(getratio)           
+            return ('play', num)
+            
     
     # Positive diff - accumulate
     current_features['cumulative_total'] += current
@@ -256,7 +279,10 @@ def update_peak_tracker(key='diff'):
     if current > current_features['peak']:
         current_features['peak'] = current
         
-        # update the condutctivity ratio
-        current_features['ratio'] =  current_features['second_half_sum'] /  current_features['first_half_sum']
+        # update the condutctivity ratio        
+        if current_features['first_half_sum'] != 0:
+            current_features['ratio'] = current_features['second_half_sum'] / current_features['first_half_sum']
+        else:
+            current_features['ratio'] = 0
     
     return False  # No reset/trigger

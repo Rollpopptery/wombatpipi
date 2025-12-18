@@ -3,6 +3,9 @@ import numpy as np
 import threading
 import time
 
+
+
+
 # Global variables
 sample_rate = 48000
 audio_device = 1  # Stealth 500P headphones
@@ -16,8 +19,16 @@ def init():
     """Initialize the audio system"""
     global audio_device
     
+    
+    # Force dmix/non-exclusive mode
+    sd.default.samplerate = 48000
+    sd.default.blocksize = 512
+    sd.default.dtype = 'float32'
+    
     # Set default device
-    sd.default.device = audio_device
+    #sd.default.device = audio_device
+    
+    sd.default.device = 'default'
     
     print(f"Audio initialized on device {audio_device}")
     print(f"Sample rate: {sample_rate} Hz")
@@ -130,6 +141,8 @@ def soundscape(signal_strength, signal_shape_ratio):
     """
     global current_frequency, current_volume
     
+   
+        
     # Map signal strength to volume (0.05 to 0.7 for better sensitivity)
     max_expected_strength = 100  # Lowered for more sensitivity
     min_volume = 0.05   # Minimum volume instead of 0
@@ -149,4 +162,5 @@ def soundscape(signal_strength, signal_shape_ratio):
     
     # Ensure tone is playing
     if not is_playing:
+        init()
         start_tone()

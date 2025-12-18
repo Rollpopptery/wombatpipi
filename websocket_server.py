@@ -37,9 +37,7 @@ async def stream_data(websocket):
                     # Extract signal features for soundscape
                     features = copy.copy(functions.current_features)  # Shallow copy
                     
-                    
-                    
-                    
+                                        
                     # Calculate shape ratio
                     #if features['second_half_sum'] > 0:
                         #ratio = features['first_half_sum'] / features['second_half_sum']

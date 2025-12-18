@@ -5,7 +5,9 @@ import time
 from collections import deque
 from functions import AdaptiveMovingAverage
 import functions
-import sound  # Add sound import
+import sound  
+import wav_player
+
 
 CURVE_SAMPLE_SIZE = 25
 TIME_BUFFER_SIZE = 100
@@ -148,7 +150,16 @@ def _read_loop():
                                     
                                     # monitor signal peaks
                                     #
-                                    functions.update_peak_tracker(key='diff')
+                                    peakresult = functions.update_peak_tracker(key='diff')
+                                    # Play conductivity number if detected
+                                    if peakresult and peakresult[0] == 'play':                                       
+                                        number_to_say = peakresult[1]  # e.g., '32'
+                                        print(" RATIO  ", peakresult)
+                                        wav_player.say(number_to_say)
+                                    
+                                    
+                                    
+                                    
                                     functions.current_features['timestamp'] = time.time()
                                     
                                     # Calculate shape ratio
