@@ -65,7 +65,7 @@
     <script src="static/js/uPlot.iife.min.js"></script>
     <script>
         // Configuration
-        const WS_URL = 'ws://localhost:8765';
+        const WS_URL = `ws://${window.location.hostname}:8765`;
         let ws;
         let chart;
         let updateCount = 0;
@@ -136,7 +136,7 @@
                 try {
                     const packet = JSON.parse(event.data);
                     
-                    if (packet.type === 'settings') {
+                    if (packet.type === 'settings') {gff
                         // Server sent tau value - update slider
                         currentTau = packet.tau;
                         document.getElementById('tau-slider').value = currentTau;

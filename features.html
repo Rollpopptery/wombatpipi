@@ -78,7 +78,7 @@
     <script src="static/js/uPlot.iife.min.js"></script>
     <script>
         // Configuration
-        const WS_URL = 'ws://localhost:8765';
+        const WS_URL = `ws://${window.location.hostname}:8765`;
         const BUFFER_SIZE = 100;  // Keep last 100 points
         
         let ws;
