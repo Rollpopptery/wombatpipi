@@ -173,7 +173,7 @@ current_features = {
     'ratio': 0
 }
     
-def extract_signal_features(samples, start_index=4, end_trim=1):
+def extract_signal_features(samples, start_index=4, end_trim=0):
     """
     Extract shape and strength features from a sample set.
     Updates the global current_features dict directly.
@@ -249,10 +249,10 @@ def force_two_digit(value):
         
         
     
-def update_peak_tracker(key='diff'):
+def update_peak_tracker():
     """Updates cumulative_total and peak directly in current_features."""
     global current_features
-    current = current_features[key]
+    current = current_features['med_av_diff'] 
     
     play_conductivity = False
     getratio = 0;
@@ -261,7 +261,7 @@ def update_peak_tracker(key='diff'):
     if current < 0:
         if(current_features['peak'] > 10):
             play_conductivity = True
-            getratio = current_features['ratio'] 
+            getratio = current_features['med_av_ratio'] 
             getratio *= 100
             
         current_features['cumulative_total'] = 0
@@ -280,9 +280,9 @@ def update_peak_tracker(key='diff'):
         current_features['peak'] = current
         
         # update the condutctivity ratio        
-        if current_features['first_half_sum'] != 0:
-            current_features['ratio'] = current_features['second_half_sum'] / current_features['first_half_sum']
+        if current_features['med_av_first_half'] != 0:
+            current_features['med_av_ratio'] = current_features['med_av_second_half'] / current_features['med_av_first_half']
         else:
-            current_features['ratio'] = 0
+            current_features['med_av_ratio'] = 0
     
     return False  # No reset/trigger

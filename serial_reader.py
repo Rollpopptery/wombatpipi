@@ -15,7 +15,7 @@ TIME_BUFFER_SIZE = 100
 # Global variables
 serial_port = None
 serial_device = '/dev/ttyACM0'  # Default USB serial device (change to match your device)
-baud_rate = 500000
+baud_rate = 1000000
 is_reading = False
 read_thread = None
 
@@ -28,6 +28,8 @@ running_sum = np.zeros(CURVE_SAMPLE_SIZE)  # Sum of last 100 curves for each poi
 # adaptive moving average
 long_average_curve = AdaptiveMovingAverage(CURVE_SAMPLE_SIZE, alpha_slow=0.03, alpha_fast=0.1)
 fast_average_curve = AdaptiveMovingAverage(CURVE_SAMPLE_SIZE, alpha_slow=0.3, alpha_fast=0.3)
+
+medium_average_curve =  AdaptiveMovingAverage(3, alpha_slow=0.1, alpha_fast=0.1)
 
 # Sound control
 enable_sound = True  # Flag to enable/disable sound updates
@@ -112,7 +114,7 @@ def stop_reading():
 
 def _read_loop():
     """Background thread that continuously reads serial data"""
-    global latest_curve, running_sum, long_average_curve, fast_average_curve
+    global latest_curve, running_sum, long_average_curve, fast_average_curve, medium_average_curve
     
     while is_reading:
         try:
@@ -136,37 +138,51 @@ def _read_loop():
                             # Update the adaptive moving averages
                             long_average_curve.update(compensated)
                             fast_average_curve.update(compensated)
+                         
                             
                             # === REAL-TIME SOUND UPDATES ===
                             if enable_sound:
                                 try:
                                     # Calculate normalized signal (fast signal - long baseline)
                                     fast_signal = fast_average_curve.get_average()
-                                    long_baseline = long_average_curve.get_average()
-                                    normalized = fast_signal - long_baseline
                                     
-                                    # Extract signal features for sound
+                                    long_baseline = long_average_curve.get_average()
+                                    
+                                    normalized = fast_signal - long_baseline                                     
+                                    
+                                    # Extract signal features for sound (and update global data)
+                                    
                                     functions.extract_signal_features(normalized.tolist())
                                     
-                                    # monitor signal peaks
+                                    # monitor signal peaks of a slower moving average
                                     #
-                                    peakresult = functions.update_peak_tracker(key='diff')
+                                    # keep a slower average of the signal, used for the conductivity calculation and voice
+                                    
+                                    # this can be put in a separate function TODO
+                                                                       
+                                    
+                                    medium_average_curve.update([functions.current_features['diff'], functions.current_features['first_half_sum'], functions.current_features['second_half_sum']])  
+                                    
+                                    med_averages =  medium_average_curve.get_average()
+                                    
+                                    functions.current_features['med_av_diff'] = med_averages[0]
+                                    functions.current_features['med_av_first_half'] = med_averages[1]   
+                                    functions.current_features['med_av_second_half'] = med_averages[2]                                    
+                                    
+                                    peakresult = functions.update_peak_tracker()
+                                    
                                     # Play conductivity number if detected
-                                    if peakresult and peakresult[0] == 'play':                                       
+                                    if peakresult and peakresult[0] == 'play':
                                         number_to_say = peakresult[1]  # e.g., '32'
                                         print(" RATIO  ", peakresult)
                                         wav_player.say(number_to_say)
                                     
-                                    
-                                    
+                                                                        
                                     
                                     functions.current_features['timestamp'] = time.time()
                                     
-                                    # Calculate shape ratio
-                                    if functions.current_features['second_half_sum'] > 0:
-                                        ratio = functions.current_features['first_half_sum'] / functions.current_features['second_half_sum']
-                                    else:
-                                        ratio = 1.0
+                                    # not used
+                                    ratio = 1;
                                   
                                     
                                     # Update sound at real data rate (~20Hz)
