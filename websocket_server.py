@@ -1,3 +1,7 @@
+# main application
+#
+
+
 import asyncio
 import websockets
 import json
@@ -32,7 +36,8 @@ async def stream_data(websocket):
                 avg = serial_reader.get_average()
                 
                 if latest and avg:
-                    normalized = np.array(avg['signal']) - np.array(avg['values'])
+                    #normalized = np.array(avg['signal']) - np.array(avg['values'])
+                    normalized = np.array(avg['signal'])
                     
                     # Extract signal features for soundscape
                     features = copy.copy(functions.current_features)  # Shallow copy

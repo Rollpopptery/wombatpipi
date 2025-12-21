@@ -55,13 +55,7 @@
     <div id="chart-container">
         <div id="chart"></div>
         <div id="stats">Waiting for data...</div>
-        <div style="text-align: center; margin: 20px;">
-            <label for="tau-slider">TAU (µs): </label>
-            <input type="range" id="tau-slider" min="10" max="100" value="30" step="1">
-            <span id="tau-value">30</span>
-        </div>
     </div>
-
     <script src="static/js/uPlot.iife.min.js"></script>
     <script>
         // Configuration
@@ -72,75 +66,71 @@
         let lastUpdateTime = Date.now();
         let fps = 0;
         let currentTau = 30;
-
+        
         function initChart() {
-    const opts = {
-        title: "Normalized Discharge Curve (Sample - Running Average)",
-        width: Math.min(1360, window.innerWidth - 80),
-        height: 500,
-        scales: {
-            x: {
-                time: false  // Force numeric axis
-            },
-            y: {
-                range: [-500, 3000]
-            }
-        },
-        series: [
-            {
-                label: "Time (µs)"
-            },
-            {
-                label: "Deviation",
-                stroke: "#1f77b4",
-                width: 2,
-                scale: "y",
-                points: {
-                    show: true,
-                    size: 4,
-                    stroke: "#1f77b4",
-                    fill: "#fff"
+            const opts = {
+                width: Math.min(1360, window.innerWidth - 80),
+                height: 500,
+                scales: {
+                    x: {
+                        time: false  // Force numeric axis
+                    },
+                    y: {
+                        range: [-500, 3000]
+                    }
+                },
+                series: [
+                    {
+                        label: "Time (µs)"
+                    },
+                    {
+                        label: "Deviation",
+                        stroke: "#1f77b4",
+                        width: 2,
+                        scale: "y",
+                        points: {
+                            show: true,
+                            size: 4,
+                            stroke: "#1f77b4",
+                            fill: "#fff"
+                        }
+                    }
+                ],
+                axes: [
+                    {
+                        label: "Time (µs)",
+                        grid: { show: true }
+                    },
+                    {
+                        scale: "y",
+                        label: "Deviation from Average",
+                        grid: { show: true }
+                    }
+                ],
+                legend: {
+                    show: true
                 }
-            }
-        ],
-        axes: [
-            {
-                label: "Time (µs)",
-                grid: { show: true }
-            },
-            {
-                scale: "y",
-                label: "Deviation from Average",
-                grid: { show: true }
-            }
-        ],
-        legend: {
-            show: true
+            };
+            chart = new uPlot(opts, [[], []], document.getElementById('chart'));
         }
-    };
-    chart = new uPlot(opts, [[], []], document.getElementById('chart'));
-}
-
+        
         // Connect to WebSocket
         function connect() {
             ws = new WebSocket(WS_URL);
-
             ws.onopen = () => {
                 console.log('WebSocket connected');
                 const status = document.getElementById('status');
                 status.textContent = 'Connected - Streaming at 10Hz';
                 status.className = 'connected';
             };
-
+            
             ws.onmessage = (event) => {
                 try {
                     const packet = JSON.parse(event.data);
                     
-                    if (packet.type === 'settings') {gff
-                        // Server sent tau value - update slider
+                    if (packet.type === 'settings') {
+                        // Server sent tau value - update current value
                         currentTau = packet.tau;
-                        document.getElementById('tau-slider').value = currentTau;
-                        document.getElementById('tau-value').textContent = currentTau;
                         console.log('TAU updated from server:', currentTau);
                         
                     } else if (packet.type === 'data') {
@@ -167,14 +157,14 @@
                     console.error('Error parsing data:', e);
                 }
             };
-
+            
             ws.onerror = (error) => {
                 console.error('WebSocket error:', error);
                 const status = document.getElementById('status');
                 status.textContent = 'Error: Connection failed';
                 status.className = 'disconnected';
             };
-
+            
             ws.onclose = () => {
                 console.log('WebSocket disconnected');
                 const status = document.getElementById('status');
@@ -185,23 +175,7 @@
                 setTimeout(connect, 2000);
             };
         }
-
-        // Handle tau slider changes
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('tau-slider').addEventListener('input', (e) => {
-                currentTau = parseFloat(e.target.value);
-                document.getElementById('tau-value').textContent = currentTau;
-                
-                // Send to server
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'set_tau',
-                        tau: currentTau
-                    }));
-                }
-            });
-        });
-
+        
         // Handle window resize
         window.addEventListener('resize', () => {
             if (chart) {
@@ -211,7 +185,7 @@
                 });
             }
         });
-
+        
         // Initialize on page load
         window.addEventListener('load', () => {
             initChart();

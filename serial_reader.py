@@ -15,7 +15,7 @@ TIME_BUFFER_SIZE = 100
 # Global variables
 serial_port = None
 serial_device = '/dev/ttyACM0'  # Default USB serial device (change to match your device)
-baud_rate = 230400
+baud_rate = 500000
 is_reading = False
 read_thread = None
 

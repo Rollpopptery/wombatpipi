@@ -173,7 +173,7 @@ current_features = {
     'ratio': 0
 }
     
-def extract_signal_features(samples, start_index=6, end_trim=1):
+def extract_signal_features(samples, start_index=4, end_trim=1):
     """
     Extract shape and strength features from a sample set.
     Updates the global current_features dict directly.
@@ -220,12 +220,12 @@ def extract_signal_features(samples, start_index=6, end_trim=1):
     
     # Split into halves
     mid_point = len(subset) // 2
-    first_half = subset[:12]
-    second_half = subset[-3:]
+    first_half = subset[:10]
+    second_half = subset[-6:]
     
     # Calculate half sums
-    first_half_sum = sum(first_half) / 12
-    second_half_sum = sum(second_half) / 3
+    first_half_sum = sum(first_half) / 10
+    second_half_sum = sum(second_half) / 6
     diff1 = first_half_sum - second_half_sum
     
     # Update global features dict directly
